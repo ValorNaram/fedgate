@@ -221,8 +221,8 @@ class Driver():
 	def __init__(self, conf):
 		self.conf = conf
 		self.psqlconf = self.conf["postgresql"]
-		self.tablespecifiedby = self.psqlconf["fieldrepresentsatable"]
-		self.primaryfield = self.psqlconf["primaryfield"]
+		self.tablespecifiedby = self.conf["fieldrepresentsatable"]
+		self.primaryfield = self.conf["primaryfield"]
 		
 		logging.info("connecting to postgresql database...")
 		try:
@@ -237,7 +237,7 @@ class Driver():
 	
 	def validateReadAction(self, func):
 		def func_wrapper(json):
-			for i in self.psqlconf["mandatoryfields"]:
+			for i in self.conf["mandatoryfields"]:
 				if not i in json: # if a mandatory field hasn't been supplied by the client, then
 					return {} # return an empty result set.
 			
@@ -268,7 +268,7 @@ class Driver():
 			query.append(self.psqlconf["querybyfield"][i])
 			params.append(json[i])
 		
-		query.append("LIMIT {} ORDER BY {} DESC".format(self.psqlconf["fetchrows"], self.psqlconf["orderbyfield"]))
+		query.append("LIMIT {} ORDER BY {} DESC".format(self.conf["fetchrows"], self.conf["orderbyfield"]))
 		
 		if "pagination" in json:
 			query.append("OFFSET %s ROWS")
@@ -314,7 +314,7 @@ class Driver():
 		
 		json[self.primaryfield] = str(uuid.uuid4())
 		
-		for i in self.psqlconf["TABLE_" + json[self.tablespecifiedby]]
+		for i in self.conf["TABLE_" + json[self.tablespecifiedby]]
 			columns.append(i.split(" ", 1)[0])
 		
 		def dummyAdd(char, toList):

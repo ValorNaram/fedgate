@@ -3,18 +3,29 @@ redirectToAfterLogout: http://localhost:8080/
 
 dbdriver: postgres
 
+tables:
+	- telegram
+
+table_telegram:
+	id uuid
+	name varchar(30)
+	region varchar(30)
+	description varchar(50)
+	invitelink varchar(300)
+	shortcode varchar(10)
+
+fetchrows: 20
+
+fieldrepresentsatable: channel
+orderbyfield: name
+primaryfield: id
+
+mandatoryfields:
+	- channel
 
 postgresql:
-	dbname: mentorapi
-	dbconnstr: dbname=mentorapi
-	fetchrows: 20
-	
-	fieldrepresentsatable: channel
-	orderbyfield: name
-	primaryfield: id
-	
-	mandatoryfields:
-		- channel
+	dbname: fedgate
+	dbconnstr: dbname=fedgate
 	
 	querybyfield:
 		id: "where id=%s",
@@ -24,13 +35,4 @@ postgresql:
 		invitelink: "where invitelink=%s",
 		shortcode: "where shortcode=%s"
 	
-	tables:
-		- telegram
 	
-	table_telegram:
-		id uuid
-		name varchar(30)
-		region varchar(30)
-		description varchar(50)
-		invitelink varchar(300)
-		shortcode varchar(10)
