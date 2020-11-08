@@ -1,0 +1,36 @@
+redirectToAfterLogin: http://localhost:8080/
+redirectToAfterLogout: http://localhost:8080/
+
+dbdriver: postgres
+
+
+postgresql:
+	dbname: mentorapi
+	dbconnstr: dbname=mentorapi
+	fetchrows: 20
+	
+	fieldrepresentsatable: channel
+	orderbyfield: name
+	primaryfield: id
+	
+	mandatoryfields:
+		- channel
+	
+	querybyfield:
+		id: "where id=%s",
+		name: "where lower(name) like lower(%s)",
+		region: "where lower(region)=lower(%s)",
+		description: "where description=%s",
+		invitelink: "where invitelink=%s",
+		shortcode: "where shortcode=%s"
+	
+	tables:
+		- telegram
+	
+	table_telegram:
+		id uuid
+		name varchar(30)
+		region varchar(30)
+		description varchar(50)
+		invitelink varchar(300)
+		shortcode varchar(10)
