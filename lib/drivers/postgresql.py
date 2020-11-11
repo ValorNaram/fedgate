@@ -259,9 +259,7 @@ class Driver():
 			func(json)
 		return func_wrapper
 	
-	@validateReadAction()
-	def getEntries(json):
-		query = ["SELECT * FROM {}"]
+	def __getEntries(json, query)
 		params = []
 		
 		for i in json:
@@ -280,7 +278,19 @@ class Driver():
 			del json["pagination"]
 		
 		
-		return Record(self.conn, sql.SQL(" ".join(query) + ";").format(sql.Identifier(json[self.tablespecifiedby])), tuple(params)).get()
+		return sql.SQL(" ".join(query) + ";").format(sql.Identifier(json[self.tablespecifiedby])), tuple(params)
+	
+	@validateReadAction()
+	def getEntries(json):
+		query = ["SELECT * FROM {}"]
+		
+		return Record(self.conn, self.__getEntries(json, query)).get()
+	
+	@validateReadAction()
+	def getEntriesDistinct(json):
+		query = ["SELECT DISTINCT * FROM {}"]
+		
+		return Record(self.conn, self.__getEntries(json, query)).get()
 	
 	@validateWriteAction()
 	def changeEntry(json):

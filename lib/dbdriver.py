@@ -24,6 +24,10 @@ class Driver():
 		self.__printError()
 		return {}
 	
+	def getEntriesDistinct(json):
+		self.__printError()
+		return {}
+	
 	def changeEntry(json):
 		self.__printError()
 		return False

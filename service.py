@@ -144,6 +144,49 @@ class FedGate(verification, coreutils):
 				return {"message": "insufficientresultbydbdriver"}
 		return {"message": "userNotLoggedIn"}
 	
+	
+	"""
+	Client sends a JSON in the following format (example):
+		{
+		"channel": "telegram",
+		"region": "Africa"
+		}
+	to get all entries in the channel `Africa`
+	
+	or sends a JSON in the following format (example):
+		{
+		"id": "7da135f7-c4e6-4122-8dfd-14a507b05a09",
+		"channel": "telegram"
+		}
+	to receive the entry with the id `7da135f7-c4e6-4122-8dfd-14a507b05a09`
+	
+	or sends a JSON in the following format (example):
+		{
+		"channel": "telegram",
+		"region": "Latin America",
+		"name": "Brasilia"
+		}
+	to get all entries in the channel `Latin America` having or containing the name `Brasilia`
+	"""
+	@cherrypy.expose
+	@cherrypy.tools.json_in()
+	@cherrypy.tools.json_out()
+	def getEntriesDistinct(self):
+		"""
+		API endpoint to receive one or more entries using a certain search criteria which is unique in every value given in the JSON key
+		"""
+		self.__crossOrigin()
+		if "sessionId" in cherrypy.request.cookie and self.isAuthorized(cherrypy.request.cookie["sessionId"].value):
+			userid = cherrypy.request.cookie["sessionId"].value.split("|")[0]
+			result = self.dbdriver.getEntriesDistinct(cherrypy.request.json)
+			if len(result) == 0:
+				return {"message": "noResult"}
+			elif type(result) is dict:
+				return result
+			else:
+				return {"message": "insufficientresultbydbdriver"}
+		return {"message": "userNotLoggedIn"}
+	
 	@cherrypy.expose
 	@cherrypy.tools.json_in()
 	@cherrypy.tools.json_out()
@@ -226,6 +269,17 @@ class FedGate(verification, coreutils):
 			if self.dbdriver.addEntry(cherrypy.request.json):
 				return {"message": True}
 			return {"message": False}
+		return {"message": "userNotLoggedIn"}
+	
+	@cherrypy.expose
+	@cherrypy.tools.json_out()
+	def getTables(self):
+		"""
+		API endpoint to receive all registered tables of the database
+		"""
+		self.__crossOrigin()
+		if "sessionId" in cherrypy.request.cookie and self.isAuthorized(cherrypy.request.cookie["sessionId"].value):
+			return {"message": APIconf["tables"]}
 		return {"message": "userNotLoggedIn"}
 	
 	@cherrypy.expose
