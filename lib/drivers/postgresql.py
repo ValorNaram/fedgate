@@ -2,7 +2,7 @@
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 from psycopg2.extensions import ISOLATION_LEVEL_DEFAULT
 from psycopg2 import sql
-import psycopg2, uuid
+import psycopg2, uuid, logging
 
 class Record():
 	def __toDict(self, table):
@@ -232,38 +232,38 @@ class Driver():
 		
 		self.name = "PostgreSQL driver for FedGate"
 		self.version = "1.0"
-		self.description = "Allows the FedGate instance to use postgres as a storage engine. This is a non-relational database"
-		self.author = "Sören Reinecke alias Valor Nara
+		self.description = "Allows the FedGate instance to use postgres as a storage engine. This will be a non-relational database"
+		self.author = "Sören Reinecke alias Valor Naram"
 	
-	def validateReadAction(self, func):
-		def func_wrapper(json):
-			for i in self.conf["mandatoryfields"]:
-				if not i in json: # if a mandatory field hasn't been supplied by the client, then
-					return {} # return an empty result set.
-			
-			if not self.tablespecifiedby in json: # if the table name specifier hasn't been supplied by the client, then
-				return {} # return an empty result set.
-			func(json)
-		return func_wrapper
+#	def validateReadAction(self, func):
+#		def func_wrapper(json):
+#			for i in self.conf["mandatoryfields"]:
+#				if not i in json: # if a mandatory field hasn't been supplied by the client, then
+#					return {} # return an empty result set.
+#			
+#			if not self.tablespecifiedby in json: # if the table name specifier hasn't been supplied by the client, then
+#				return {} # return an empty result set.
+#			func(json)
+#		return func_wrapper
+#	
+#	def validateWriteAction(self, func):
+#		def dummyFunc(json):
+#			return {"survivedValidator": True} # means that client's input survived the validator we call below and pass in this function
+#		
+#		def func_wrapper(json):
+#			valInp = validateReadAction(dummyFunc) # calling 'validateReadAction' decorator and passing it a function which does nothing so our function we want to validate does not get called by the callee while we are not finish doing validation
+#			result = valInp(json) # validate the 'json' python3 dictionary input using the validator 'validateReadAction'
+#			
+#			if not self.primaryfield in json and not len(result) == 0: # if the primary key for the primary field to send with that write request hasn't been supplied by the client and the validator we called above does not return any result, then
+#				return {} # return an empty result set.
+#			func(json)
+#		return func_wrapper
 	
-	def validateWriteAction(self, func):
-		def dummyFunc(json):
-			return {"survivedValidator": True} # means that client's input survived the validator we call below and pass in this function
-		
-		def func_wrapper(json):
-			valInp = validateReadAction(dummyFunc) # calling 'validateReadAction' decorator and passing it a function which does nothing so our function we want to validate does not get called by the callee while we are not finish doing validation
-			result = valInp(json) # validate the 'json' python3 dictionary input using the validator 'validateReadAction'
-			
-			if not self.primaryfield in json and not len(result) == 0: # if the primary key for the primary field to send with that write request hasn't been supplied by the client and the validator we called above does not return any result, then
-				return {} # return an empty result set.
-			func(json)
-		return func_wrapper
-	
-	def __getEntries(json, query)
+	def __getEntries(self, json, query):
 		params = []
 		
 		for i in json:
-			query.append(self.psqlconf["querybyfield"][i])
+			query.append(self.psqlconf["querybyfield"][i].replace("*", "%"))
 			params.append(json[i])
 		
 		query.append("LIMIT {} ORDER BY {} DESC".format(self.conf["fetchrows"], self.conf["orderbyfield"]))
@@ -280,20 +280,37 @@ class Driver():
 		
 		return sql.SQL(" ".join(query) + ";").format(sql.Identifier(json[self.tablespecifiedby])), tuple(params)
 	
-	@validateReadAction()
-	def getEntries(json):
+#	@self.validateReadAction()
+	def getEntries(self, json):
 		query = ["SELECT * FROM {}"]
+		formatting = [sq]
 		
 		return Record(self.conn, self.__getEntries(json, query)).get()
 	
-	@validateReadAction()
-	def getEntriesDistinct(json):
+#	@self.validateReadAction()
+	def getEntriesDistinct(self, json):
 		query = ["SELECT DISTINCT * FROM {}"]
 		
 		return Record(self.conn, self.__getEntries(json, query)).get()
 	
-	@validateWriteAction()
-	def changeEntry(json):
+#	@self.validateReadAction()
+	def getUnique(self, json):
+		query = ["SELECT DISTINCT {} FROM {}"]
+		formatting = [sql.Identifier(json["column"]), json[self.tablespecifiedby]]
+		param = []
+		
+		if "pagination" in json:
+			query.append("OFFSET %s ROWS")
+			params.append(json["pagination"]["from"])
+			
+			query.append("FETCH NEXT %s ROWS ONLY")
+			params.append(json["pagination"]["to"])
+		
+		return Record(sql.SQL(" ".join(query) + ";").format(tuple(formatting)), tuple(param))
+		
+	
+#	@self.validateWriteAction()
+	def changeEntry(self, json):
 		query = ["UPDATE {}", "SET"]
 		formatting = [sql.Identifier(json[self.tablespecifiedby])]
 		params = []
@@ -315,30 +332,35 @@ class Driver():
 		
 		Record(self.conn, sql.SQL(" ".join(query) + ";").format(tuple(formatting)), tuple(params)).get()
 	
-	@validateWriteAction()
-	def addEntry(json):
+#	@self.validateWriteAction()
+	def addEntry(self, json):
 		query = ["INSERT INTO {} ("]
-		formatting = []
+		formatting = [sql.Identifier(json[self.tablespecifiedby])]
 		params = []
 		columns = []
 		
 		json[self.primaryfield] = str(uuid.uuid4())
 		
-		for i in self.conf["TABLE_" + json[self.tablespecifiedby]]
+		for i in self.conf["TABLE_" + json[self.tablespecifiedby]]:
 			columns.append(i.split(" ", 1)[0])
 		
-		def dummyAdd(char, toList):
-			for i in columns:
-				if i in json:
-					if len(query) == 1:
-						query.append(char)
-					else:
-						query.append(", " + char)
-					toList.append(i)
-		
-		dummyAdd("{}", formatting)
+		for i in columns:
+			if i in json:
+				if len(query) == 1:
+					query.append("{}")
+				else:
+					query.append(", {}")
+				formatting.append(sql.Identifier(i))
 		query.append(") VALUES (")
-		dummyAdd("%s", query)
+		
+		for i in columns:
+			if i in json:
+				if len(query) == 1:
+					query.append("%s")
+				else:
+					query.append(", %s")
+				formatting.append(i)
+		
 		query.append(")")
 		
 		rec = Record(self.conn, sql.SQL(" ".join(query) + ";").format(tuple(formatting)), tuple(params))
@@ -348,6 +370,11 @@ class Driver():
 		rec.cancel()
 		return False
 	
-	def removeEntry(json):
+	def removeEntry(self, json):
 		result = Record(self.conn, sql.SQL("DELETE FROM {} WHERE id=%s;").format(sql.Identifier(json["category"])), (json["id"],))
+		return True
+	
+	def exit(self):
+		logging.info("Closing connection to PostgreSQL database...")
+		self.conn.close()
 		return True

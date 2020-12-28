@@ -6,17 +6,37 @@ from lib.dbdriver import Driver
 
 import cherrypy, os, importlib, copy, yaml, logging
 
-HTMLEscape = {"<": "&lt;", ">": "&gt;"}
+_EXPOSE = ["fetchrows", "fieldrepresentsatable", "orderbyfield", "primaryfield", "mandatoryfields", "tables", "dbdriver"]
+
+HTMLEscape = {"<": "&lt;", ">": "&gt;", "/*": "\/\*", "*/": "\*\/"}
 
 oauthProviders = {}
 APIconf = {}
 imageurls = {}
+atShutdown = []
 
-class FedGate(verification, coreutils):
+def validateReadAction(json):
+	for i in APIconf["mandatoryfields"]:
+		if not i in json: # if a mandatory field hasn't been supplied by the client, then
+			return False # which means the input is wrong
+			
+	if not APIconf["tablespecifiedby"] in json: # if the table name specifier hasn't been supplied by the client, then
+		return False # which means the input is wrong
+	return True
+	
+def validateWriteAction(self, func):
+	result = validateReadAction(json) # validate the 'json' python3 dictionary input using the validator 'validateReadAction'
+			
+	if not APIconf["primaryfield"] in json and not result == True: # if the primary key for the primary field to send with that write request hasn't been supplied by the client and the validator we called above does not return any result, then
+		return False # which means the input is wrong
+	return True
+
+class Fedgate(verification):
 	def __init__(self, secretserverkey):
 		self.secretserverkey = secretserverkey
-		self.dbdriver = Driver(APIconf)
-		self.messages = Messages()
+		self.dbdriver = Driver(APIconf).driver
+		print(type(self.dbdriver))
+		atShutdown.append(self.dbdriver.exit)
 	
 	@cherrypy.expose
 	def login(self, loginProvider):
@@ -96,15 +116,10 @@ class FedGate(verification, coreutils):
 		if "sessionId" in cherrypy.request.cookie and self.isAuthorized(cherrypy.request.cookie["sessionId"].value):
 			userid = cherrypy.request.cookie["sessionId"].value.split("|")[0]
 			
-			self.__deleteUserEntry(userid)
 			self.__removeCookie("sessionId")
-			self.__redirect("redirectToAfterLogout")
-			return {"message": "loggedOut"}
+			return {"url": APIconf["redirectToAfterLogout"]}
 		return {"message": "userNotLoggedIn"}
 	
-	@cherrypy.expose
-	@cherrypy.tools.json_in()
-	@cherrypy.tools.json_out()
 	"""
 	Client sends a JSON in the following format (example):
 		{
@@ -128,20 +143,30 @@ class FedGate(verification, coreutils):
 		}
 	to get all entries in the channel `Latin America` having or containing the name `Brasilia`
 	"""
+	@cherrypy.expose
+	@cherrypy.tools.json_in()
+	@cherrypy.tools.json_out()
 	def getEntries(self):
 		"""
 		API endpoint to receive one or more entries using a certain search criteria
 		"""
 		self.__crossOrigin()
 		if "sessionId" in cherrypy.request.cookie and self.isAuthorized(cherrypy.request.cookie["sessionId"].value):
+			result = {}
 			userid = cherrypy.request.cookie["sessionId"].value.split("|")[0]
-			result = self.dbdriver.getEntries(cherrypy.request.json)
+			json = cherrypy.request.json
+			
+			for entry in json:
+				json[entry] = self.__escapeHTML(json[entry])
+			if validateReadAction(json):
+				result = self.dbdriver.getEntries(json)
+			
 			if len(result) == 0:
 				return {"message": "noResult"}
 			elif type(result) is dict:
 				return result
 			else:
-				return {"message": "insufficientresultbydbdriver"}
+				return {"message": "insufficientResultByDBDriver"}
 		return {"message": "userNotLoggedIn"}
 	
 	
@@ -166,30 +191,67 @@ class FedGate(verification, coreutils):
 		"region": "Latin America",
 		"name": "Brasilia"
 		}
-	to get all entries in the channel `Latin America` having or containing the name `Brasilia`
+	to get all entries in the region `Latin America` having or containing the name `Brasilia`
 	"""
 	@cherrypy.expose
 	@cherrypy.tools.json_in()
 	@cherrypy.tools.json_out()
-	def getEntriesDistinct(self):
+	def getDistinctEntries(self):
 		"""
 		API endpoint to receive one or more entries using a certain search criteria which is unique in every value given in the JSON key
 		"""
 		self.__crossOrigin()
 		if "sessionId" in cherrypy.request.cookie and self.isAuthorized(cherrypy.request.cookie["sessionId"].value):
+			result = {}
 			userid = cherrypy.request.cookie["sessionId"].value.split("|")[0]
-			result = self.dbdriver.getEntriesDistinct(cherrypy.request.json)
+			json = cherrypy.request.json
+			
+			for entry in json:
+				json[entry] = self.__escapeHTML(json[entry])
+			if validateReadAction(json):
+				result = self.dbdriver.getEntriesDistinct(json)
+			
 			if len(result) == 0:
 				return {"message": "noResult"}
 			elif type(result) is dict:
 				return result
 			else:
-				return {"message": "insufficientresultbydbdriver"}
+				return {"message": "insufficientResultByDBDriver"}
 		return {"message": "userNotLoggedIn"}
 	
+	"""
+	Client sends a JSON in the following format (example):
+		{
+		"channel": "telegram",
+		"column": "region"
+		}
+	"""
 	@cherrypy.expose
 	@cherrypy.tools.json_in()
 	@cherrypy.tools.json_out()
+	def getUnique(self):
+		"""
+		API endpoint to receive all variations of values a key takes
+		"""
+		self.__crossOrigin()
+		if "sessionId" in cherrypy.request.cookie and self.isAuthorized(cherrypy.request.cookie["sessionId"].value):
+			result = {}
+			userid = cherrypy.request.cookie["sessionId"].value.split("|")[0]
+			json = cherrypy.request.json
+			
+			for entry in json:
+				json[entry] = self.__escapeHTML(json[entry])
+			if validateReadAction(json):
+				result = self.dbdriver.getUnique(json)
+			
+			if len(result) == 0:
+				return {"message": "noResult"}
+			elif type(result) is dict:
+				return result
+			else:
+				return {"message": "insufficientResultByDBDriver"}
+		return {"message": "userNotLoggedIn"}
+	
 	"""
 	Client sends a JSON in the following format (example):
 		{
@@ -202,6 +264,9 @@ class FedGate(verification, coreutils):
 		}
 	to change the entry in the database
 	"""
+	@cherrypy.expose
+	@cherrypy.tools.json_in()
+	@cherrypy.tools.json_out()
 	def changeEntry(self):
 		"""
 		API endpoint to create or change an entry in the database
@@ -210,16 +275,15 @@ class FedGate(verification, coreutils):
 		if "sessionId" in cherrypy.request.cookie and self.isAuthorized(cherrypy.request.cookie["sessionId"].value):
 			userid = cherrypy.request.cookie["sessionId"].value.split("|")[0]
 			json = cherrypy.request.json
+			
 			for entry in json:
 				json[entry] = self.__escapeHTML(json[entry])
-			if self.dbdriver.changeEntry(json):
-				return {"message": True}
+			if validateWriteAction(json):
+				if self.dbdriver.changeEntry(json):
+					return {"message": True}
 			return {"message": False}
 		return {"message": "userNotLoggedIn"}
 	
-	@cherrypy.expose
-	@cherrypy.tools.json_in()
-	@cherrypy.tools.json_out()
 	"""
 	Client sends a JSON in the following format (example):
 		{
@@ -228,6 +292,9 @@ class FedGate(verification, coreutils):
 		}
 	to remove the entry in the database
 	"""
+	@cherrypy.expose
+	@cherrypy.tools.json_in()
+	@cherrypy.tools.json_out()
 	def removeEntry(self):
 		"""
 		API endpoint to remove an entry from the database
@@ -236,16 +303,15 @@ class FedGate(verification, coreutils):
 		if "sessionId" in cherrypy.request.cookie and self.isAuthorized(cherrypy.request.cookie["sessionId"].value):
 			userid = cherrypy.request.cookie["sessionId"].value.split("|")[0]
 			json = cherrypy.request.json
+			
 			for entry in json:
 				json[entry] = self.__escapeHTML(json[entry])
-			if self.dbdriver.removeEntry(json):
-				return {"message": True}
+			if validateWriteAction(json):
+				if self.dbdriver.removeEntry(json):
+					return {"message": True}
 			return {"message": False}
 		return {"message": "userNotLoggedIn"}
 	
-	@cherrypy.expose
-	@cherrypy.tools.json_in()
-	@cherrypy.tools.json_out()
 	"""Client sends a JSON in the following format (example):
 		{
 		"id": "7da135f7-c4e6-4122-8dfd-14a507b05a09",
@@ -256,6 +322,9 @@ class FedGate(verification, coreutils):
 		"username": "osmbrazil"
 		}
 	to create the entry in the database"""
+	@cherrypy.expose
+	@cherrypy.tools.json_in()
+	@cherrypy.tools.json_out()
 	def addEntry(self):
 		"""
 		API endpoint to create an entry in the database
@@ -264,10 +333,12 @@ class FedGate(verification, coreutils):
 		if "sessionId" in cherrypy.request.cookie and self.isAuthorized(cherrypy.request.cookie["sessionId"].value):
 			userid = cherrypy.request.cookie["sessionId"].value.split("|")[0]
 			json = cherrypy.request.json
+			
 			for entry in json:
 				json[entry] = self.__escapeHTML(json[entry])
-			if self.dbdriver.addEntry(cherrypy.request.json):
-				return {"message": True}
+			if validateWriteAction(json):
+				if self.dbdriver.addEntry(cherrypy.request.json):
+					return {"message": True}
 			return {"message": False}
 		return {"message": "userNotLoggedIn"}
 	
@@ -284,16 +355,32 @@ class FedGate(verification, coreutils):
 	
 	@cherrypy.expose
 	@cherrypy.tools.json_out()
-	def driverExpose(self):
+	def meta(self):
 		self.__crossOrigin()
-		return {
+		meta = {}
+		
+		if "sessionId" in cherrypy.request.cookie and self.isAuthorized(cherrypy.request.cookie["sessionId"].value):
+			meta["loggedIn"] = True
+		else:
+			meta["loggedIn"] = False
+		
+		meta["dbdriver"] = {
 		"name": self.dbdriver.name if "name" in dir(self.dbdriver) else None,
 		"version": self.dbdriver.version if "version" in dir(self.dbdriver) else None,
 		"description": self.dbdriver.description if "description" in dir(self.dbdriver) else None,
 		"author": self.dbdriver.author if "author" in dir(self.dbdriver) else None,
 		"website": self.dbdriver.website if "website" in dir(self.dbdriver) else None,
-		"source": self.dbdriver.source if "source" in dir(self.dbdriver) else None
-		"custom": self.dbdriver.customExpose if "customExpose" in dir(self.dbdriver) else None}
+		"source": self.dbdriver.source if "source" in dir(self.dbdriver) else None,
+		"custom": self.dbdriver.customExpose if "customExpose" in dir(self.dbdriver) else None
+		}
+		
+		for key in _EXPOSE:
+			if key in APIconf:
+				meta[key] = APIconf[key]
+			else:
+				meta[key] = None
+		
+		return meta
 	
 	def _cp_dispatch(self, vpath):
 		if vpath[0] == "login":
@@ -308,18 +395,20 @@ class FedGate(verification, coreutils):
 			return self
 		
 def main():
-	global APIconf, oauthProviders
+	global APIconf, oauthProviders, atShutdown
 	
 	print("Loading FedGate configuration...")
-	sfile = open(os.path.join(os.getcwd(), "fedgate.yml", "r")
-	APIconf = yaml.save_load(sfile)
+	loglevel = "info"
+	sfile = open(os.path.join(os.getcwd(), "fedgate.yml"), "r")
+	APIconf = yaml.safe_load(sfile)
 	sfile.close()
 	
-	loglevel = APIconf["loglevel"]
+	if "loglevel" in APIconf:
+		loglevel = APIconf["loglevel"]
 	if loglevel == "info":
-		logging.basicConfig(format='[fosmbot]: %(asctime)s %(message)s', level=logging.INFO, datefmt="%m/%d/%Y %I:%M:%S %p")
+		logging.basicConfig(format='[FedGate]: %(asctime)s %(message)s', level=logging.INFO, datefmt="%m/%d/%Y %I:%M:%S %p")
 	elif loglevel == "debug":
-		logging.basicConfig(format='[fosmbot]: %(asctime)s %(message)s', level=logging.DEBUG, datefmt="%m/%d/%Y %I:%M:%S %p")
+		logging.basicConfig(format='[FedGate]: %(asctime)s %(message)s', level=logging.DEBUG, datefmt="%m/%d/%Y %I:%M:%S %p")
 	
 	logging.info("Generating secret server key just this instance knows...")
 	secretserverkey = os.urandom(16)
@@ -331,16 +420,16 @@ def main():
 			oauthProviders[content] = {}
 			oauthProviders[content]["plugin"] = importlib.import_module("oauthproviders." + content).provider()
 			sfile = open(os.path.join("oauthproviders", content, "config.yml"), "r")
-			filebuffer = sfile.read()
+			oauthProviders[content]["config"] = yaml.safe_load(sfile)
 			sfile.close()
-			config = {}
-			for entry in filebuffer.split("\n"):
-				if entry.find(":") > -1:
-					key, value = entry.split(":", 1)
-					config[key.strip()] = str(value.strip())
-			oauthProviders[content]["config"] = config
 	
 	logging.info("Starting cherrypy server...")
-	cherrypy.quickstart(mentor(secretserverkey), "/", "mentorserver.cfg")
+	cherrypy.quickstart(Fedgate(secretserverkey), "/", "fedgate.cfg")
+	
+	logging.info("Beginning to shut down FedGate...")
+	for func in atShutdown:
+		func()
+	logging.info("SHUT DOWN MESSAGE\nWas a nice time to serve for you :)\nBye, see you soon!")
+
 if __name__ == "__main__":
 	main() 

@@ -1,0 +1,56 @@
+<html>
+	<head>
+		<meta charset='utf-8' />
+		<meta name='viewport' content='width=device-width; initial-scale=1' />
+		<title>FedGate Web Portal</title>
+		
+		<link href='css/basic.css' type='text/css' rel='stylesheet' />
+	</head>
+	<body>
+		<nav>
+			<ul>
+				<li><p class='menu_btn'>&#69716;</p>
+					<div class='searchbox navmenu-close'>
+						<div class='table'>
+							<p>Search groups on:</p>
+							<div class='table_searchbox'>
+								<input type='text' id='table' />
+								<ul id='autocompleteTable'>
+								
+								</ul>
+							</div>
+						</div>
+						<br/>
+						<div class='category'>
+							<p>and in region:</p>
+							<div class='category_searchbox'>
+								<input type='text' id='category' />
+								<ul id='autocompleteCategory'>
+								
+								</ul>
+							</div>
+						</div>
+						<button onclick='fetchChannels()'>Search</button>
+						<button onclick='loginologout()' id='loginologout' state='login' logintext='Login' logouttext='Logout'>Login</button>
+					</div>
+				</li>
+			</ul>
+		</nav>
+		<main>
+			<section id='resultset'>
+				<div class='item'>
+					<button onclick='editItem(event.target)' class='editbtn'>✏️ &nbsp; Edit</button>
+					<button onclick='changeItem(event.target)' class='hide sendbtn'>Send</button>
+					<h1 class='editable' key='name'>{Name}</h1>
+					<h2 class='editable' key='region'>{Region}</h2>
+					<p>Shortcode: <input class='editable' key='shortcode' type='text' value='{Shortcode}' /></p>
+					<p>Invitelink: <input class='editable' key='invitelink' type='text' value='{Invitelink}' /></p>
+					<textarea class='editable' key='description'>{Description}</textarea>
+				</div>
+			</section>
+			<section class='newEntry'></section>
+		</main>
+		<script src='js/core.js'></script>
+		<script src='js/fedgate.js'></script>
+	</body>
+</html>
