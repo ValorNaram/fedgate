@@ -109,9 +109,15 @@ ul > li > .searchbox > div > div > input[type="text"] {
 	margin-top:5px;
 	margin-bottom:5px;
 }
+
 ul > li > .searchbox > div > div > input[type="text"]:hover, ul > li > .searchbox > div > div > input[type="text"]:focus {
 	border:none;
 	border-bottom:1px solid #005bc0ff;
+}
+
+.table_searchbox {
+	width:100%;
+	position:relative;
 }
 
 /*
@@ -136,4 +142,27 @@ main > section > .item > h2 {
 	font-size:14px;
 	color:darkblue;
 	padding-bottom:5px;
+}
+
+/*
+Autocompletion
+*/
+.autocompletion {
+	list-style-type:none;
+	position:absolute;
+	background-color:white;
+	width:100%;
+	left:0;
+    right:0;
+    padding-bottom:5px;
+}
+
+.autocompletion li {
+	padding:5px;
+	border-bottom:1px solid #005bc0ff;
+	border-radius:5px;
+}
+
+.autocompletion li:hover {
+	background-color:#005bc0ff;
 }

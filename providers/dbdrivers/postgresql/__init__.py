@@ -1,195 +1,47 @@
 #!/usr/bin/env python3
-from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
-from psycopg2.extensions import ISOLATION_LEVEL_DEFAULT
-from psycopg2 import sql
-import psycopg2, uuid, logging
-
-class Record():
-	def __toDict(self, table):
-		data = {}
-		index = 0
-		if self.cur.rowcount == 0:
-			return data
-		
-		for row in table:
-			col = {}
-			for i in range(0, len(self.columns)):
-				col[self.columns[i]] = row[i]
-			data[index] = col
-			index += 1
-		return data
-	
-	def __init__(self, conn, query, params=(), limit=1):
-		self.conn = conn
-		self.cur = self.conn.cursor()
-		self.limit = limit
-		
-		if params == ():
-			self.cur.execute(query)
-		else:
-			self.cur.execute(query, params)
-		
-		self.columns = []
-		if not self.cur.description == None:
-			for col in self.cur.description:
-				self.columns.append(col.name)
-		
-	def __iter__(self):
-		return self
-	
-	def __next__(self):
-		if self.limit == 1:
-			result = self.cur.fetchone()
-			if result == None:
-				self.cur.close()
-				raise StopIteration
-			
-			return self.__toDict([result])[0]
-		else:
-			result = self.cur.fetchmany(self.limit)
-			if result == None:
-				self.cur.close()
-				raise StopIteration
-			
-			return self.__toDict(result)
-	
-	def cancel(self):
-		self.cur.close()
-	
-	def get(self):
-		result = {}
-		
-		try:
-			result = self.__next__()
-		except StopIteration:
-			pass
-		
-		self.cancel()
-		return result
-	def status(self):
-		return self.cur.statusmessage
-
-class management(): # not thread safe
-	def __init__(self, dbconnstr):
-		self.error = ""
-		try:
-			self.conn = psycopg2.connect(dbconnstr)
-		except psycopg2.errors.OperationalError:
-			self.error = "DOES NOT EXIST"
-	
-	def createDatabase(self, dbname):
-		self.conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
-		cur = self.conn.cursor()
-		cur.execute("CREATE DATABASE {} WITH OWNER '{}'".format(dbname, os.environ["USER"]))
-		cur.close()
-		self.conn.set_isolation_level(ISOLATION_LEVEL_DEFAULT)
-	
-	def alterTable(self, name, desiredCols, beloud=True):
-		query = []
-		returnedCols = []
-		desiredCols_simplified = []
-		changes = False
-		
-		if not ("id", "text") in desiredCols:
-			desiredCols = [("id", "text")] + desiredCols
-		
-		for i in desiredCols:
-			desiredCols_simplified.append(i[0])
-		
-		with self.conn:
-			with self.conn.cursor() as cursor:
-				cursor.execute(sql.SQL("SELECT * FROM {} LIMIT 0").format(sql.Identifier(name)))
-				for col in cursor.description:
-					returnedCols.append(col.name)
-		
-		for n, i in enumerate(returnedCols):
-			colname = i[0]
-			if colname in returnedCols and not colname in desiredCols_simplified:
-				# remove from database table `name`
-				if beloud:
-					print("\033[1;31mwill remove\033[0;m '{}' from database table '{}'".format(i, name))
-				
-				cur = self.conn.cursor()
-				query.append(sql.SQL("ALTER TABLE {} DROP COLUMN {}").format(sql.Identifier(name), sql.Identifier(colname)).as_string(cur))
-				cur.close()
-				changes = True
-		for n, i in enumerate(desiredCols):
-			colname, coltype = i
-			if colname in desiredCols_simplified and not colname in returnedCols:
-				# add to database table `name`
-				if beloud:
-					print("\033[1;32mwill add\033[0;m '{}' to database table '{}'".format(i, name))
-				
-				cur = self.conn.cursor()
-				print(colname, coltype)
-				query.append(sql.SQL("ALTER TABLE {} ADD {} {}").format(sql.Identifier(name), sql.Identifier(colname), sql.Identifier(coltype)).as_string(cur))
-				cur.close()
-				changes = True
-		
-		if len(query) > 0:
-			with self.conn:
-				with self.conn.cursor() as cursor:
-					print("executing query ('will' becomes 'do now')...")
-					cursor.execute(";\n".join(query))
-		return changes
-	
-	def executeCMD(self, query, params=()):
-		error = None
-		with self.conn:
-			with self.conn.cursor() as cursor:
-				try:
-					cursor.execute(query, params)
-				except Exception as e:
-					error = e
-					cursor.rollback()
-		return error
-				
-	def tableExists(self, name):
-		exists = False
-		with self.conn:
-			with self.conn.cursor() as cursor:
-				try:
-					cursor.execute("SELECT * FROM " + name + " LIMIT 0")
-					exists = True
-				except psycopg2.errors.UndefinedTable:
-					exists = False
-		return exists
-	
-	def tearDown(self):
-		self.conn.close()
-
+from record import Record
+from management import Management
+import logging, signal
 
 class Driver():
 	def __initDB(self):
-		dbhelper = management(APIconf["dbconnstr"])
+		_CREATE
+		dbhelper = Management(self.psqlconf["dbconnstr"])
+		
+		if self.conntries >= 2:
+			logging.info("Failed to create database '{}', exiting...".format(self.psqlconf["dbname"]))
+			signal.alarm(15)
+			return False
+		
 		if not dbhelper.error == "":
 			logging.info("\033[1;mDatabase does not exist\033[0;m")
 			
-			logging.info("creating database '{}'...".format(APIconf["dbname"]))
-			os.system(cmds["createdb"].format(APIconf["dbname"]))
+			logging.info("creating database '{}'...".format(self.psqlconf["dbname"]))
+			os.system(cmds["createdb"].format(self.psqlconf["dbname"]))
 		
 			logging.info("restarting...")
-			return main()
+			self.conntries += 1
+			return __initDB()
 		else:
 			logging.info("\033[1;mDatabase does exist\033[0;m")
 		
-		logging.info("checking existence of requirred tables...")
-		for i in queries:
+		logging.info("checking existence of required tables...")
+		for i in self.conf["tables"]:
 			if dbhelper.tableExists(i):
 				logging.info("\033[0;32m  '{}' exists...\033[0;m".format(i))
 			else:
 				logging.info("\033[0;31m  '{}' does not exist\033[0;m".format(i))
-				if "table_" + i in APIconf:
+				if "table_" + i in self.conf:
 					logging.info("  creating table '{}'...".format(i))
-					dbhelper.executeCMD(sqls[queries[i]].format(i, ",\n".join(APIconf["table_" + i])))
+					dbhelper.executeCMD(sqls[queries[i]].format(i, ",\n".join(self.conf["table_" + i])))
 				else:
 					logging.info("\033[0;31mtable scheme not specified in mentorapi.yml!\033[0;m")
 			
 		logging.info("syncing columns (insert/remove)...")
 		changes = False
-		for i in queries:
-			if "table_" + i in APIconf:
-				cols = copy.copy(APIconf["table_" + i])
+		for i in self.conf["tables"]:
+			if "table_" + i in self.conf:
+				cols = copy.copy(self.conf["table_" + i])
 				for n, content in enumerate(cols):
 					colname, coltype = content.split(" ")
 					cols[n] = (colname, coltype)
@@ -198,10 +50,10 @@ class Driver():
 		logging.info("generating select statement for the view creation query...")
 		select = []
 		select2 = []
-		for i in queries:
+		for i in self.conf["tables"]:
 			confname = "table_" + i
-			if confname in APIconf:
-				for content in APIconf[confname]:
+			if confname in self.conf:
+				for content in self.conf[confname]:
 					content = content.split(" ")
 					if not content[0] in select2:
 						select.append(i + "." + content[0])
@@ -220,6 +72,7 @@ class Driver():
 
 	def __init__(self, conf):
 		self.conf = conf
+		self.conntries = 0
 		self.psqlconf = self.conf["postgresql"]
 		self.tablespecifiedby = self.conf["fieldrepresentsatable"]
 		self.primaryfield = self.conf["primaryfield"]
@@ -260,13 +113,16 @@ class Driver():
 #		return func_wrapper
 	
 	def __getEntries(self, json, query):
+		table = sql.Identifier(json[self.tablespecifiedby])
 		params = []
+		
+		del json[self.tablespecifiedby]
 		
 		for i in json:
 			query.append(self.psqlconf["querybyfield"][i].replace("*", "%"))
 			params.append(json[i])
 		
-		query.append("LIMIT {} ORDER BY {} DESC".format(self.conf["fetchrows"], self.conf["orderbyfield"]))
+		query.append("ORDER BY {} DESC LIMIT {} ".format(self.conf["orderbyfield"], self.conf["fetchrows"]))
 		
 		if "pagination" in json:
 			query.append("OFFSET %s ROWS")
@@ -278,20 +134,21 @@ class Driver():
 			del json["pagination"]
 		
 		
-		return sql.SQL(" ".join(query) + ";").format(sql.Identifier(json[self.tablespecifiedby])), tuple(params)
+		return sql.SQL(" ".join(query) + ";").format(table), tuple(params)
 	
 #	@self.validateReadAction()
 	def getEntries(self, json):
 		query = ["SELECT * FROM {}"]
-		formatting = [sq]
 		
-		return Record(self.conn, self.__getEntries(json, query)).get()
+		sql, param = self.__getEntries(json, query)
+		return Record(self.conn, sql, param).get()
 	
 #	@self.validateReadAction()
 	def getEntriesDistinct(self, json):
 		query = ["SELECT DISTINCT * FROM {}"]
 		
-		return Record(self.conn, self.__getEntries(json, query)).get()
+		sql, param = self.__getEntries(json, query)
+		return Record(self.conn, sql, param).get()
 	
 #	@self.validateReadAction()
 	def getUnique(self, json):
@@ -306,7 +163,7 @@ class Driver():
 			query.append("FETCH NEXT %s ROWS ONLY")
 			params.append(json["pagination"]["to"])
 		
-		return Record(sql.SQL(" ".join(query) + ";").format(tuple(formatting)), tuple(param))
+		return Record(self.conn, sql.SQL(" ".join(query) + ";").format(tuple(formatting)), tuple(param))
 		
 	
 #	@self.validateWriteAction()

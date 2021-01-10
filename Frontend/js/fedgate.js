@@ -33,7 +33,7 @@ document.getElementById("category").addEventListener("input", function(e) {
 });
 
 function listAutocompletionItems(out, args) {
-	let elem = document.getElementById(args.id);
+	let elem = document.getElementById(args.id); //autocompleteTable
 	elem.innerHTML = ""; //clean it
 	
 	out = out.message
@@ -49,8 +49,9 @@ function listAutocompletionItems(out, args) {
 		li.id = args.id + "_" + String(index);
 		index += 1;
 		li.addEventListener("click", function(e) {
-			elem.previousSibling.value = elem.innerText;
-			e.target = elem;
+			console.log(e)
+			e.target.parentElement.previousElementSibling.value = e.target.innerText;
+			e.elem = elem;
 			hideAutocompletion(e);
 		});
 		lis.push(li);
@@ -64,8 +65,9 @@ function listAutocompletionItems(out, args) {
 }
 
 function hideAutocompletion(e) {
-	e.target.style = "";
-	document.removeEventListener("click", hideSearchBox);
+	e.elem.style = "";
+	e.elem.innerHTML = "";
+	document.removeEventListener("click", hideAutocompletion);
 }
 
 function loginologout() {

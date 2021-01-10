@@ -1,6 +1,0 @@
-accessTokenURL: https://www.openstreetmap.org/oauth/access_token
-userDetails: https://api.openstreetmap.org/api/0.6/user/details
-requestTokenURL: https://www.openstreetmap.org/oauth/request_token
-loginPage: https://www.openstreetmap.org/oauth/authorize
-customerKey: gNJqaRGaJ12622bf8wlmVsN6Hw8kYPCOQts7bVOJ
-customerSecret: iqvTfVVZAFR2jXk7RoJPib9mMAT4MBxeyR6Pnsdc

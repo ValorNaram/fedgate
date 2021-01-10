@@ -2,9 +2,9 @@
 from urllib.parse import parse_qs
 from lib.oauth import verification
 #from lib.database import helper as dbhelper
-from lib.dbdriver import Driver
+from lib.dbdriver import Loader as DBDriverLoader
 
-import cherrypy, os, importlib, copy, yaml, logging
+import cherrypy, os, importlib, copy, yaml, logging, sys
 
 _EXPOSE = ["fetchrows", "fieldrepresentsatable", "orderbyfield", "primaryfield", "mandatoryfields", "tables", "dbdriver"]
 
@@ -20,7 +20,7 @@ def validateReadAction(json):
 		if not i in json: # if a mandatory field hasn't been supplied by the client, then
 			return False # which means the input is wrong
 			
-	if not APIconf["tablespecifiedby"] in json: # if the table name specifier hasn't been supplied by the client, then
+	if not APIconf["fieldrepresentsatable"] in json: # if the table name specifier hasn't been supplied by the client, then
 		return False # which means the input is wrong
 	return True
 	
@@ -34,8 +34,7 @@ def validateWriteAction(self, func):
 class Fedgate(verification):
 	def __init__(self, secretserverkey):
 		self.secretserverkey = secretserverkey
-		self.dbdriver = Driver(APIconf).driver
-		print(type(self.dbdriver))
+		self.dbdriver = DBDriverLoader(APIconf)
 		atShutdown.append(self.dbdriver.exit)
 	
 	@cherrypy.expose
@@ -414,12 +413,13 @@ def main():
 	secretserverkey = os.urandom(16)
 	
 	logging.info("Loading oauth provider plugins...")
-	for content in os.listdir("oauthproviders"):
-		if os.path.isdir(os.path.join("oauthproviders", content)):
+	sys.path.append(os.path.join(os.path.dirname(__file__), "providers", "oauth"))
+	for content in os.listdir("providers/oauth"):
+		if os.path.isdir(os.path.join("providers", "oauth", content)):
 			logging.info("  - " + content)
 			oauthProviders[content] = {}
-			oauthProviders[content]["plugin"] = importlib.import_module("oauthproviders." + content).provider()
-			sfile = open(os.path.join("oauthproviders", content, "config.yml"), "r")
+			oauthProviders[content]["plugin"] = importlib.import_module("oauth." + content).provider()
+			sfile = open(os.path.join("providers", "oauth", content, "config.yml"), "r")
 			oauthProviders[content]["config"] = yaml.safe_load(sfile)
 			sfile.close()
 	
