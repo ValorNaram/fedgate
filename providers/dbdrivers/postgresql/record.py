@@ -29,6 +29,11 @@ class Record():
 		if not self.cur.description == None:
 			for col in self.cur.description:
 				self.columns.append(col.name)
+	
+	def getAll(self):
+		result = self.cur.fetchall()
+		self.cancel(close=True)
+		return self.__toDict(result)
 		
 	def __iter__(self):
 		return self
@@ -49,10 +54,11 @@ class Record():
 			
 			return self.__toDict(result)
 	
-	def cancel(self):
-		self.cur.close()
+	def cancel(self, close=True):
+		if close:
+			self.cur.close()
 	
-	def get(self):
+	def get(self, close=False):
 		result = {}
 		
 		try:
@@ -60,7 +66,9 @@ class Record():
 		except StopIteration:
 			pass
 		
-		self.cancel()
+		self.cancel(close)
 		return result
-	def status(self):
+	
+	def status(self, close=False):
+		self.cancel(close)
 		return self.cur.statusmessage

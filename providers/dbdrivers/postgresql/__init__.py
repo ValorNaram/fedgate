@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-from record import Record
-from management import Management
-import logging, signal
+from .record import Record
+from .management import Initiator
+import logging, signal, psycopg2
 
 class Driver():
 	def __initDB(self):
@@ -83,6 +83,12 @@ class Driver():
 		except psycopg2.errors.OperationalError:
 			self.error = psycopg2.errors.OperationalError
 		
+		self.tables = {}
+		for table in self.conf["tables"]:
+			self.tables[table] = self.conf["table_" + table]
+		
+		Initiator(self.tables, self.psqlconf["dbconnstr"]).database()
+		
 		self.name = "PostgreSQL driver for FedGate"
 		self.version = "1.0"
 		self.description = "Allows the FedGate instance to use postgres as a storage engine. This will be a non-relational database"
@@ -141,14 +147,14 @@ class Driver():
 		query = ["SELECT * FROM {}"]
 		
 		sql, param = self.__getEntries(json, query)
-		return Record(self.conn, sql, param).get()
+		return Record(self.conn, sql, param).getAll()
 	
 #	@self.validateReadAction()
 	def getEntriesDistinct(self, json):
 		query = ["SELECT DISTINCT * FROM {}"]
 		
 		sql, param = self.__getEntries(json, query)
-		return Record(self.conn, sql, param).get()
+		return Record(self.conn, sql, param).getAll()
 	
 #	@self.validateReadAction()
 	def getUnique(self, json):
@@ -163,7 +169,7 @@ class Driver():
 			query.append("FETCH NEXT %s ROWS ONLY")
 			params.append(json["pagination"]["to"])
 		
-		return Record(self.conn, sql.SQL(" ".join(query) + ";").format(tuple(formatting)), tuple(param))
+		return Record(self.conn, sql.SQL(" ".join(query) + ";").format(tuple(formatting)), tuple(param)).getAll()
 		
 	
 #	@self.validateWriteAction()
@@ -187,7 +193,7 @@ class Driver():
 		formatting.append(sql.Identifier(self.primaryfield))
 		params.append(primevalue)
 		
-		Record(self.conn, sql.SQL(" ".join(query) + ";").format(tuple(formatting)), tuple(params)).get()
+		Record(self.conn, sql.SQL(" ".join(query) + ";").format(tuple(formatting)), tuple(params)).getAll()
 	
 #	@self.validateWriteAction()
 	def addEntry(self, json):
@@ -220,7 +226,7 @@ class Driver():
 		
 		query.append(")")
 		
-		rec = Record(self.conn, sql.SQL(" ".join(query) + ";").format(tuple(formatting)), tuple(params))
+		rec = Record(self.conn, sql.SQL(" ".join(query) + ";").format(tuple(formatting)), tuple(params)).getAll()
 		if rec.status().startswith("INSERT"):
 			rec.cancel()
 			return True
@@ -228,7 +234,7 @@ class Driver():
 		return False
 	
 	def removeEntry(self, json):
-		result = Record(self.conn, sql.SQL("DELETE FROM {} WHERE id=%s;").format(sql.Identifier(json["category"])), (json["id"],))
+		result = Record(self.conn, sql.SQL("DELETE FROM {} WHERE id=%s;").format(sql.Identifier(json["category"])), (json["id"],)).getAll()
 		return True
 	
 	def exit(self):
